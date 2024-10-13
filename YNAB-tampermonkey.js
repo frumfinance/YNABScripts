@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         frum.finance YNAB Enhancements
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  A collection of additional features from https://frum.finance
 // @author       https://frum.finance
 // @match        https://app.ynab.com/*
@@ -57,9 +57,18 @@
         return "N/A";
     };
 
+    // Function to split target details into separate parts
+    const parseTargetDetails = (targetDetails) => {
+        const match = targetDetails.match(/^([A-Za-z ]+) (\d+[,.\d]*) (Each [A-Za-z]+) (By .+)$/);
+        if (match) {
+            return [match[1], match[2], match[3], match[4]];
+        }
+        return ["N/A", "N/A", "N/A", "N/A"];
+    };
+
     // Function to extract YNAB budget data
     const extractData = async () => {
-        const rows = [["Category Group", "Category", "Target Details"]];
+        const rows = [["Category Group", "Category", "Target Type", "Target Amount", "Target Frequency", "Target Due Date"]];
         let currentGroupName = "N/A";
         const processedCategories = new Set();
         const groups = document.querySelectorAll(".budget-table-row");
@@ -84,12 +93,14 @@
 
                 // Extract target details from the inspector
                 const targetDetails = getTargetDetailsFromInspector();
+                const [targetType, targetAmount, targetFrequency, targetDueDate] = parseTargetDetails(targetDetails);
 
                 // Enhanced logging to debug the extraction process
                 console.log(`Group: '${currentGroupName}', Category: '${categoryName}', Target Details Found:`, targetDetails !== "N/A" ? "Yes" : "No");
                 console.log(`Extracted target details for category '${categoryName}':`, targetDetails);
 
-                rows.push([currentGroupName, categoryName, targetDetails]);
+                // Add data to rows, ensuring category group is correctly captured
+                rows.push([currentGroupName, categoryName, targetType, targetAmount, targetFrequency, targetDueDate]);
             }
         }
 
