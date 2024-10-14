@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         frum.finance YNAB Enhancements
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  A collection of additional features from https://frum.finance
 // @author       https://frum.finance
 // @match        https://app.ynab.com/*
@@ -59,23 +59,49 @@
 
     // Function to split target details into separate parts
     const parseTargetDetails = (targetDetails) => {
-        const match = targetDetails.match(/^([A-Za-z ]+) (\d+[,.\d]*) (Each [A-Za-z]+) (By .+)$/);
+        const match = targetDetails.match(/^([A-Za-z ]+?) (\d{1,3}(?:,\d{3})*(?:\.\d{2})?) (Each [A-Za-z]+) (By .+)$/);
         if (match) {
-            return [match[1], match[2], match[3], match[4]];
+            return [match[1], match[2].replace(/,/g, ''), match[3], match[4]];
         }
         return ["N/A", "N/A", "N/A", "N/A"];
     };
 
+    // Function to calculate the annual total for the goal
+    const calculateAnnualTotal = (amount, frequency) => {
+        const numericAmount = parseFloat(amount);
+        if (isNaN(numericAmount)) {
+            return "N/A";
+        }
+        switch (frequency) {
+            case 'Each Week':
+                return (numericAmount * 52).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            case 'Each Month':
+                return (numericAmount * 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            case 'Each Year':
+                return numericAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            default:
+                return "N/A";
+        }
+    };
+
     // Function to extract YNAB budget data
     const extractData = async () => {
-        const rows = [["Category Group", "Category", "Target Type", "Target Amount", "Target Frequency", "Target Due Date"]];
+        const rows = [["Category Group", "Category", "Target Type", "Target Amount", "Target Frequency", "Target Due Date", "Annual Total"]];
         let currentGroupName = "N/A";
         const processedCategories = new Set();
         const groups = document.querySelectorAll(".budget-table-row");
 
+        const groupTotals = {};
+        let overallTotal = 0;
+
         for (const group of groups) {
             if (group.classList.contains("is-master-category")) {
+                // Add the total for the previous group before starting a new one
+                if (currentGroupName !== "N/A" && groupTotals[currentGroupName]) {
+                    rows.push([currentGroupName, "TOTAL", "", "", "", "", groupTotals[currentGroupName].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })]);
+                }
                 currentGroupName = group.querySelector(".budget-table-cell-name button")?.textContent.trim() || "N/A";
+                rows.push([currentGroupName, "", "", "", "", "", ""]); // Add group header
             } else if (!group.classList.contains("is-master-category")) {
                 const categoryName = group.querySelector(".budget-table-cell-name button")?.textContent.trim() || "N/A";
                 const categoryId = group.dataset.entityId;
@@ -94,15 +120,39 @@
                 // Extract target details from the inspector
                 const targetDetails = getTargetDetailsFromInspector();
                 const [targetType, targetAmount, targetFrequency, targetDueDate] = parseTargetDetails(targetDetails);
+                const annualTotal = calculateAnnualTotal(targetAmount, targetFrequency);
 
                 // Enhanced logging to debug the extraction process
-                console.log(`Group: '${currentGroupName}', Category: '${categoryName}', Target Details Found:`, targetDetails !== "N/A" ? "Yes" : "No");
-                console.log(`Extracted target details for category '${categoryName}':`, targetDetails);
+                console.log(`Group: '${currentGroupName}', Category: '${categoryName}', Target Details:`, {
+                    targetDetails,
+                    targetType,
+                    targetAmount,
+                    targetFrequency,
+                    targetDueDate,
+                    annualTotal
+                });
 
                 // Add data to rows, ensuring category group is correctly captured
-                rows.push([currentGroupName, categoryName, targetType, targetAmount, targetFrequency, targetDueDate]);
+                rows.push([currentGroupName, categoryName, targetType, parseFloat(targetAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), targetFrequency, targetDueDate, annualTotal]);
+
+                // Update group and overall totals
+                if (!groupTotals[currentGroupName]) {
+                    groupTotals[currentGroupName] = 0;
+                }
+                if (annualTotal !== "N/A") {
+                    groupTotals[currentGroupName] += parseFloat(annualTotal.replace(/,/g, ''));
+                    overallTotal += parseFloat(annualTotal.replace(/,/g, ''));
+                }
             }
         }
+
+        // Add the total for the last group
+        if (currentGroupName !== "N/A" && groupTotals[currentGroupName]) {
+            rows.push([currentGroupName, "TOTAL", "", "", "", "", groupTotals[currentGroupName].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })]);
+        }
+
+        // Add overall total to CSV rows
+        rows.push(["ALL GROUPS", "TOTAL", "", "", "", "", overallTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })]);
 
         exportToCSV(rows);
     };
