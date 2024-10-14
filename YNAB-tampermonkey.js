@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         frum.finance YNAB Enhancements
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  A collection of additional features from https://frum.finance
 // @author       https://frum.finance
 // @match        https://app.ynab.com/*
@@ -59,9 +59,13 @@
 
     // Function to split target details into separate parts
     const parseTargetDetails = (targetDetails) => {
-        const match = targetDetails.match(/^([A-Za-z ]+?) (\d{1,3}(?:,\d{3})*(?:\.\d{2})?) (Each [A-Za-z]+) (By .+)$/);
+        const match = targetDetails.match(/^([A-Za-z ]+?) (\d{1,3}(?:,\d{3})*(?:\.\d{2})?) (Each [A-Za-z]+)?(?: By (.+))?$/) ||
+                      targetDetails.match(/^Have a Balance of (\d{1,3}(?:,\d{3})*(?:\.\d{2})?) By (.+)$/);
         if (match) {
-            return [match[1], match[2].replace(/,/g, ''), match[3], match[4]];
+            if (targetDetails.startsWith("Have a Balance of")) {
+                return ["Have a Balance", match[1].replace(/,/g, ''), "N/A", match[2]];
+            }
+            return [match[1], match[2].replace(/,/g, ''), match[3] || "N/A", match[4] || "N/A"];
         }
         return ["N/A", "N/A", "N/A", "N/A"];
     };
