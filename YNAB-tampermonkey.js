@@ -1,4 +1,4 @@
-// ==UserScript==
+ // ==UserScript==
 // @name         frum.finance YNAB Enhancements
 // @namespace    http://tampermonkey.net/
 // @version      1.3
@@ -41,8 +41,9 @@
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "ynab_categories_export.csv");
+        link.setAttribute("download", `ynab_categories_export_${timestamp}.csv`);
         document.body.appendChild(link);
 
         link.click();
@@ -118,13 +119,17 @@
                 // Add the total for the previous group before starting a new one
                 addGroupTotalRow(rows, currentGroupName, groupTotals);
                 currentGroupName = group.querySelector(".budget-table-cell-name button")?.textContent.trim() || "N/A";
+                if (currentGroupName === "Credit Card Payments") {
+                    currentGroupName = "N/A";
+                    continue; // Skip the "Credit Card Payments" group and its categories
+                }
                 rows.push([currentGroupName, "", "", "", "", "", ""]); // Add group header
                 groupTotals[currentGroupName] = { startRow: rows.length + 1, total: 0 };
             } else if (!group.classList.contains("is-master-category")) {
                 const categoryName = group.querySelector(".budget-table-cell-name button")?.textContent.trim() || "N/A";
                 const categoryId = group.dataset.entityId;
 
-                if (processedCategories.has(categoryId)) {
+                if (currentGroupName === "N/A") {
                     continue;
                 }
 
@@ -163,7 +168,7 @@
             if (row[1] === "TOTAL") acc.push(`G${index + 1}`);
             return acc;
         }, []);
-        rows.push(["GRAND TOTAL", "TOTAL", "", "", "", "", `=SUM(${groupTotalRows.join(",")})`]);
+        rows.push(["GRAND TOTAL", "", "", "", "", "", `=SUM(${groupTotalRows.join(",")})`]);
 
         exportToCSV(rows);
     };
