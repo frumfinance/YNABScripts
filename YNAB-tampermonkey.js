@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         frum.finance YNAB Enhancements
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.3
 // @description  A collection of additional features from https://frum.finance
 // @author       https://frum.finance
 // @match        https://app.ynab.com/*
@@ -11,23 +11,26 @@
 (function() {
     'use strict';
 
-    // Utility function to wait for a specific element to appear
+    // Utility function to wait for a specific element to appear using MutationObserver
     const waitForElement = (selector, timeout = 10000) => {
         return new Promise((resolve, reject) => {
-            const interval = 200;
-            let timePassed = 0;
-
-            const checkExist = setInterval(() => {
+            const observer = new MutationObserver((mutations, obs) => {
                 const element = document.querySelector(selector);
                 if (element) {
-                    clearInterval(checkExist);
+                    obs.disconnect();
                     resolve(element);
-                } else if (timePassed >= timeout) {
-                    clearInterval(checkExist);
-                    reject(new Error('Element not found: ' + selector));
                 }
-                timePassed += interval;
-            }, interval);
+            });
+
+            observer.observe(document, {
+                childList: true,
+                subtree: true
+            });
+
+            setTimeout(() => {
+                observer.disconnect();
+                reject(new Error('Element not found: ' + selector));
+            }, timeout);
         });
     };
 
