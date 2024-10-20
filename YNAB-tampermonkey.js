@@ -120,22 +120,22 @@
         }
     };
 
+    const shouldIgnore = (name) => {
+        return ["Credit Card", "NoExport"].some(ignore => name.includes(ignore))
+    }
+
     // Function to extract YNAB budget data
     const extractData = async () => {
         const exportRows = [["Category Group", "Category", "Target Type", "Target Amount", "Target Frequency", "Target Due Date", "Annual Total"],
                       ["https://frum.finance", "Donate: https://frum.finance/donate", "", "", "", "", ""]];
         let currentGroupName = "N/A";
-        const processedCategories = new Set();
         const groups = document.querySelectorAll(".budget-table-row");
         const groupTotals = {};
-
-        const shouldIgnore = (name) => {
-          return ["Credit Card", "NoExport"].some(ignore => name.includes(ignore))
-        }
 
         for (const group of groups) {
             const row = group.querySelector(".budget-table-cell-name button");
             const rowName = row?.textContent.trim() || "N/A";
+            // If the row is a group header
             if (group.classList.contains("is-master-category")) {
                 // Add the total for the previous group before starting a new one
                 addGroupTotalRow(exportRows, currentGroupName, groupTotals);
@@ -146,17 +146,16 @@
                 }
                 exportRows.push([currentGroupName, "", "", "", "", "", ""]); // Add group header
                 groupTotals[currentGroupName] = { startRow: exportRows.length + 1, total: 0 };
-            } else {
+            } 
+            // Else, the row is a specific category within the group
+            else {
                 const categoryName = rowName.includes("Redact") ? "Redacted" : rowName;
-                const categoryId = group.dataset.entityId;
-
                 if (currentGroupName === "N/A" || shouldIgnore(categoryName)) {
                     continue;
                 }
 
                 // Click the category to populate the target inspector
                 row?.click();
-                processedCategories.add(categoryId);
 
                 // Wait for the target inspector to load
                 await new Promise(resolve => setTimeout(resolve, 5)); // Reduced delay for better performance
