@@ -56,9 +56,11 @@
         if (targetInspector) {
             const targetBehavior = targetInspector.querySelector('.target-behavior')?.textContent.trim() || "N/A";
             const targetByDate = targetInspector.querySelector('.target-by-date')?.textContent.trim() || "";
-            return `${targetBehavior} ${targetByDate}`.trim();
+            const currentBalanceElement = [...targetInspector.querySelectorAll('.target-breakdown-item')].find(item => item.querySelector('.target-breakdown-item-label')?.textContent.includes("Current Balance"));
+            const currentBalance = currentBalanceElement ? parseFloat(currentBalanceElement.querySelector('.target-breakdown-item-value .user-data.currency.tabular-nums').textContent.replace(/,/g, '')) : 0;
+            return { targetDetails: `${targetBehavior} ${targetByDate}`.trim(), currentBalance };
         }
-        return "N/A";
+        return { targetDetails: "N/A", currentBalance: 0 };
     };
 
     // Function to split target details into separate parts
@@ -75,9 +77,9 @@
     };
 
     // Function to calculate the annual total for the goal
-    const calculateAnnualTotal = (amount, frequency) => {
+    const calculateAnnualTotal = (amount, frequency, dueDate, currentBalance) => {
         const numericAmount = parseFloat(amount);
-        if (isNaN(numericAmount)) {
+        if (isNaN(numericAmount) || numericAmount <= 0) {
             return "N/A";
         }
         switch (frequency) {
@@ -87,6 +89,20 @@
                 return formatCurrency(numericAmount * 12);
             case 'Each Year':
                 return formatCurrency(numericAmount);
+            case 'N/A':
+                if (dueDate !== "N/A") {
+                    const currentDate = new Date();
+                    const dueDateMatch = dueDate.match(/(\b\w+\b) (\d{4})/);
+                    if (dueDateMatch) {
+                        const dueMonth = new Date(`${dueDateMatch[1]} 1, ${dueDateMatch[2]}`).getMonth();
+                        const dueYear = parseInt(dueDateMatch[2], 10);
+                        const monthsRemaining = (dueYear - currentDate.getFullYear()) * 12 + (dueMonth - currentDate.getMonth());
+                        if (monthsRemaining > 0) {
+                            return formatCurrency(((numericAmount - currentBalance) / monthsRemaining) * 12);
+                        }
+                    }
+                }
+                return "N/A";
             default:
                 return "N/A";
         }
@@ -106,44 +122,49 @@
 
     // Function to extract YNAB budget data
     const extractData = async () => {
-        const rows = [["Category Group", "Category", "Target Type", "Target Amount", "Target Frequency", "Target Due Date", "Annual Total"],
+        const exportRows = [["Category Group", "Category", "Target Type", "Target Amount", "Target Frequency", "Target Due Date", "Annual Total"],
                       ["https://frum.finance", "Donate: https://frum.finance/donate", "", "", "", "", ""]];
         let currentGroupName = "N/A";
         const processedCategories = new Set();
         const groups = document.querySelectorAll(".budget-table-row");
-
         const groupTotals = {};
 
+        const shouldIgnore = (name) => {
+          return ["Credit Card", "NoExport"].some(ignore => name.includes(ignore))
+        }
+
         for (const group of groups) {
+            const row = group.querySelector(".budget-table-cell-name button");
+            const rowName = row?.textContent.trim() || "N/A";
             if (group.classList.contains("is-master-category")) {
                 // Add the total for the previous group before starting a new one
-                addGroupTotalRow(rows, currentGroupName, groupTotals);
-                currentGroupName = group.querySelector(".budget-table-cell-name button")?.textContent.trim() || "N/A";
-                if (currentGroupName === "Credit Card Payments") {
+                addGroupTotalRow(exportRows, currentGroupName, groupTotals);
+                currentGroupName = rowName;
+                if (shouldIgnore(currentGroupName)) {
                     currentGroupName = "N/A";
                     continue; // Skip the "Credit Card Payments" group and its categories
                 }
-                rows.push([currentGroupName, "", "", "", "", "", ""]); // Add group header
-                groupTotals[currentGroupName] = { startRow: rows.length + 1, total: 0 };
-            } else if (!group.classList.contains("is-master-category")) {
-                const categoryName = group.querySelector(".budget-table-cell-name button")?.textContent.trim() || "N/A";
+                exportRows.push([currentGroupName, "", "", "", "", "", ""]); // Add group header
+                groupTotals[currentGroupName] = { startRow: exportRows.length + 1, total: 0 };
+            } else {
+                const categoryName = rowName.includes("Redact") ? "Redacted" : rowName;
                 const categoryId = group.dataset.entityId;
 
-                if (currentGroupName === "N/A") {
+                if (currentGroupName === "N/A" || shouldIgnore(categoryName)) {
                     continue;
                 }
 
                 // Click the category to populate the target inspector
-                group.querySelector(".budget-table-cell-name button")?.click();
+                row?.click();
                 processedCategories.add(categoryId);
 
                 // Wait for the target inspector to load
                 await new Promise(resolve => setTimeout(resolve, 5)); // Reduced delay for better performance
 
                 // Extract target details from the inspector
-                const targetDetails = getTargetDetailsFromInspector();
+                const { targetDetails, currentBalance } = getTargetDetailsFromInspector();
                 const [targetType, targetAmount, targetFrequency, targetDueDate] = parseTargetDetails(targetDetails);
-                const annualTotal = calculateAnnualTotal(targetAmount, targetFrequency);
+                const annualTotal = calculateAnnualTotal(targetAmount, targetFrequency, targetDueDate, currentBalance);
 
                 // Enhanced logging to debug the extraction process
                 console.log(`Group: '${currentGroupName}', Category: '${categoryName}', Target Details:`, {
@@ -152,25 +173,26 @@
                     targetAmount,
                     targetFrequency,
                     targetDueDate,
-                    annualTotal
+                    annualTotal,
+                    currentBalance,
                 });
 
-                // Add data to rows, ensuring category group is correctly captured
-                rows.push([currentGroupName, categoryName, targetType, formatCurrency(parseFloat(targetAmount)), targetFrequency, targetDueDate, annualTotal]);
+                // Add data to exportRows, ensuring category group is correctly captured
+                exportRows.push([currentGroupName, categoryName, targetType, formatCurrency(parseFloat(targetAmount)), targetFrequency, targetDueDate, annualTotal]);
             }
         }
 
         // Add the total for the last group
-        addGroupTotalRow(rows, currentGroupName, groupTotals);
+        addGroupTotalRow(exportRows, currentGroupName, groupTotals);
 
-        // Get rows with group totals for overall total calculation
-        const groupTotalRows = rows.reduce((acc, row, index) => {
+        // Get exportRows with group totals for overall total calculation
+        const groupTotalRows = exportRows.reduce((acc, row, index) => {
             if (row[1] === "TOTAL") acc.push(`G${index + 1}`);
             return acc;
         }, []);
-        rows.push(["GRAND TOTAL", "", "", "", "", "", `=SUM(${groupTotalRows.join(",")})`]);
+        exportRows.push(["GRAND TOTAL", "", "", "", "", "", `=SUM(${groupTotalRows.join(",")})`]);
 
-        exportToCSV(rows);
+        exportToCSV(exportRows);
     };
 
     // Function to add a button to the page for CSV export
