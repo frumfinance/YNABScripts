@@ -4,8 +4,8 @@
 // @version      1.4
 // @description  A collection of additional features from https://frum.finance
 // @author       https://frum.finance
-// @downloadURL  https://raw.githubusercontent.com/frumfinance/YNABScripts/refs/heads/main/YNAB-tampermonkey.js
-// @updateURL    https://raw.githubusercontent.com/frumfinance/YNABScripts/refs/heads/main/YNAB-tampermonkey.js
+// @downloadURL  https://github.com/frumfinance/YNABScripts/raw/refs/heads/main/YNAB-tampermonkey.user.js
+// @updateURL    https://github.com/frumfinance/YNABScripts/raw/refs/heads/main/YNAB-tampermonkey.user.js
 // @match        https://app.ynab.com/*
 // @grant        none
 // ==/UserScript==
