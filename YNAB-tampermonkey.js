@@ -215,7 +215,7 @@
         };
 
         // Add button to the budget toolbar instead of fixed position
-        waitForElement("#ember48 > div.budget-table-header > div.budget-toolbar")
+        waitForElement("div.budget-table > div.budget-table-header > div.budget-toolbar")
             .then(toolbar => {
                 toolbar.appendChild(button);
             })
