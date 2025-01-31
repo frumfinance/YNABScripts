@@ -1,7 +1,7 @@
  // ==UserScript==
 // @name         frum.finance YNAB Enhancements
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  A collection of additional features from https://frum.finance
 // @author       https://frum.finance
 // @updateURL    https://github.com/frumfinance/YNABScripts/edit/main/YNAB-tampermonkey.js
